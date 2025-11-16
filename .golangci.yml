@@ -1,0 +1,18 @@
+# .golangci.yml
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - govet
+    - staticcheck
+    - gosimple
+    - unused
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+
+output:
+  format: colored-line-number
