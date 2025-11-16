@@ -27,23 +27,23 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
-	
+
 	http.HandleFunc("/team/add", func(w http.ResponseWriter, r *http.Request) {
 		handlers.AddTeamHandler(w, r, store)
 	})
-	
+
 	http.HandleFunc("/team/get", func(w http.ResponseWriter, r *http.Request) {
 		handlers.GetTeamHandler(w, r, store)
 	})
-	
+
 	http.HandleFunc("/users/setIsActive", func(w http.ResponseWriter, r *http.Request) {
 		handlers.SetUserActiveHandler(w, r, store)
 	})
-	
+
 	http.HandleFunc("/pullRequest/create", func(w http.ResponseWriter, r *http.Request) {
 		handlers.CreatePRHandler(w, r, store)
 	})
-	
+
 	http.HandleFunc("/pullRequest/merge", func(w http.ResponseWriter, r *http.Request) {
 		handlers.MergePRHandler(w, r, store)
 	})
@@ -69,4 +69,3 @@ func main() {
 	fmt.Println("Server starting on port 8080...")
 	http.ListenAndServe(":8080", nil)
 }
-

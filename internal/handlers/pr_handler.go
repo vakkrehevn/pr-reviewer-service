@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 func CreatePRHandler(w http.ResponseWriter, r *http.Request, store *storage.Storage) {
 	if r.Method != "POST" {
 		SendError(w, ErrorNotFound, "Method not allowed", http.StatusMethodNotAllowed)
@@ -47,10 +49,10 @@ func CreatePRHandler(w http.ResponseWriter, r *http.Request, store *storage.Stor
 	reviewers := assignReviewers(teamMembers, 2)
 
 	pr := models.PullRequest{
-		PullRequestID:    request.PullRequestID,
-		PullRequestName:  request.PullRequestName,
-		AuthorID:         request.AuthorID,
-		Status:           "OPEN",
+		PullRequestID:     request.PullRequestID,
+		PullRequestName:   request.PullRequestName,
+		AuthorID:          request.AuthorID,
+		Status:            "OPEN",
 		AssignedReviewers: reviewers,
 	}
 
@@ -72,11 +74,9 @@ func assignReviewers(teamMembers []models.User, maxReviewers int) []string {
 		return []string{}
 	}
 
-	rand.Seed(time.Now().UnixNano())
-
 	shuffled := make([]models.User, len(teamMembers))
 	copy(shuffled, teamMembers)
-	rand.Shuffle(len(shuffled), func(i, j int) {
+	rng.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
 
@@ -88,6 +88,7 @@ func assignReviewers(teamMembers []models.User, maxReviewers int) []string {
 
 	return reviewers
 }
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -96,174 +97,169 @@ func min(a, b int) int {
 }
 
 func MergePRHandler(w http.ResponseWriter, r *http.Request, store *storage.Storage) {
-    if r.Method != "POST" {
-        SendError(w, ErrorNotFound, "Method not allowed", http.StatusMethodNotAllowed)
-        return
-    }
+	if r.Method != "POST" {
+		SendError(w, ErrorNotFound, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-    var request struct {
-        PullRequestID string `json:"pull_request_id"`
-    }
+	var request struct {
+		PullRequestID string `json:"pull_request_id"`
+	}
 
-    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-        SendError(w, ErrorNotFound, "Invalid JSON", http.StatusBadRequest)
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		SendError(w, ErrorNotFound, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
 
-    pr, err := store.GetPRByID(request.PullRequestID)
-    if err != nil || pr == nil {
-        SendError(w, ErrorNotFound, "PR not found", http.StatusNotFound)
-        return
-    }
+	pr, err := store.GetPRByID(request.PullRequestID)
+	if err != nil || pr == nil {
+		SendError(w, ErrorNotFound, "PR not found", http.StatusNotFound)
+		return
+	}
 
-    if pr.Status == "MERGED" {
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]interface{}{
-            "pr": pr,
-        })
-        return
-    }
+	if pr.Status == "MERGED" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"pr": pr,
+		})
+		return
+	}
 
-    err = store.UpdatePRStatus(request.PullRequestID, "MERGED")
-    if err != nil {
-        SendError(w, ErrorNotFound, "Failed to merge PR", http.StatusInternalServerError)
-        return
-    }
+	err = store.UpdatePRStatus(request.PullRequestID, "MERGED")
+	if err != nil {
+		SendError(w, ErrorNotFound, "Failed to merge PR", http.StatusInternalServerError)
+		return
+	}
 
-    updatedPR, _ := store.GetPRByID(request.PullRequestID)
+	updatedPR, _ := store.GetPRByID(request.PullRequestID)
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "pr": updatedPR,
-    })
-}
-
-func stringPtr(s string) *string {
-	return &s
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pr": updatedPR,
+	})
 }
 
 func ReassignReviewerHandler(w http.ResponseWriter, r *http.Request, store *storage.Storage) {
-    if r.Method != "POST" {
-        SendError(w, ErrorNotFound, "Method not allowed", http.StatusMethodNotAllowed)
-        return
-    }
+	if r.Method != "POST" {
+		SendError(w, ErrorNotFound, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-    var request struct {
-        PullRequestID string `json:"pull_request_id"`
-        OldUserID     string `json:"old_user_id"`
-    }
+	var request struct {
+		PullRequestID string `json:"pull_request_id"`
+		OldUserID     string `json:"old_user_id"`
+	}
 
-    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-        SendError(w, ErrorNotFound, "Invalid JSON", http.StatusBadRequest)
-        return
-    }
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		SendError(w, ErrorNotFound, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
 
-    pr, err := store.GetPRByID(request.PullRequestID)
-    if err != nil || pr == nil {
-        SendError(w, ErrorNotFound, "PR not found", http.StatusNotFound)
-        return
-    }
+	pr, err := store.GetPRByID(request.PullRequestID)
+	if err != nil || pr == nil {
+		SendError(w, ErrorNotFound, "PR not found", http.StatusNotFound)
+		return
+	}
 
-    if pr.Status == "MERGED" {
-        SendError(w, ErrorPRMerged, "cannot reassign on merged PR", http.StatusConflict)
-        return
-    }
+	if pr.Status == "MERGED" {
+		SendError(w, ErrorPRMerged, "cannot reassign on merged PR", http.StatusConflict)
+		return
+	}
 
-    isAssigned := false
-    for _, reviewer := range pr.AssignedReviewers {
-        if reviewer == request.OldUserID {
-            isAssigned = true
-            break
-        }
-    }
-    
-    if !isAssigned {
-        SendError(w, ErrorNotAssigned, "reviewer is not assigned to this PR", http.StatusConflict)
-        return
-    }
+	isAssigned := false
+	for _, reviewer := range pr.AssignedReviewers {
+		if reviewer == request.OldUserID {
+			isAssigned = true
+			break
+		}
+	}
 
-    oldReviewerTeam, err := store.GetUserTeam(request.OldUserID)
-    if err != nil {
-        SendError(w, ErrorNotFound, "Old reviewer team not found", http.StatusNotFound)
-        return
-    }
+	if !isAssigned {
+		SendError(w, ErrorNotAssigned, "reviewer is not assigned to this PR", http.StatusConflict)
+		return
+	}
 
-    teamMembers, err := store.GetActiveTeamMembers(oldReviewerTeam, pr.AuthorID)
-    if err != nil {
-        SendError(w, ErrorNotFound, "Failed to get team members", http.StatusInternalServerError)
-        return
-    }
+	oldReviewerTeam, err := store.GetUserTeam(request.OldUserID)
+	if err != nil {
+		SendError(w, ErrorNotFound, "Old reviewer team not found", http.StatusNotFound)
+		return
+	}
 
-    availableMembers := []models.User{}
-    for _, member := range teamMembers {
-        isCurrentReviewer := false
-        for _, reviewer := range pr.AssignedReviewers {
-            if member.UserID == reviewer {
-                isCurrentReviewer = true
-                break
-            }
-        }
-        if !isCurrentReviewer {
-            availableMembers = append(availableMembers, member)
-        }
-    }
+	teamMembers, err := store.GetActiveTeamMembers(oldReviewerTeam, pr.AuthorID)
+	if err != nil {
+		SendError(w, ErrorNotFound, "Failed to get team members", http.StatusInternalServerError)
+		return
+	}
 
-    if len(availableMembers) == 0 {
-        SendError(w, ErrorNoCandidate, "no active replacement candidate in team", http.StatusConflict)
-        return
-    }
+	availableMembers := []models.User{}
+	for _, member := range teamMembers {
+		isCurrentReviewer := false
+		for _, reviewer := range pr.AssignedReviewers {
+			if member.UserID == reviewer {
+				isCurrentReviewer = true
+				break
+			}
+		}
+		if !isCurrentReviewer {
+			availableMembers = append(availableMembers, member)
+		}
+	}
 
-    rand.Seed(time.Now().UnixNano())
-    newReviewer := availableMembers[rand.Intn(len(availableMembers))]
+	if len(availableMembers) == 0 {
+		SendError(w, ErrorNoCandidate, "no active replacement candidate in team", http.StatusConflict)
+		return
+	}
 
-    newReviewers := make([]string, len(pr.AssignedReviewers))
-    for i, reviewer := range pr.AssignedReviewers {
-        if reviewer == request.OldUserID {
-            newReviewers[i] = newReviewer.UserID
-        } else {
-            newReviewers[i] = reviewer
-        }
-    }
+	newReviewer := availableMembers[rng.Intn(len(availableMembers))]
 
-    err = store.UpdatePRReviewers(request.PullRequestID, newReviewers)
-    if err != nil {
-        SendError(w, ErrorNotFound, "Failed to update PR reviewers", http.StatusInternalServerError)
-        return
-    }
+	newReviewers := make([]string, len(pr.AssignedReviewers))
+	for i, reviewer := range pr.AssignedReviewers {
+		if reviewer == request.OldUserID {
+			newReviewers[i] = newReviewer.UserID
+		} else {
+			newReviewers[i] = reviewer
+		}
+	}
 
-    updatedPR, _ := store.GetPRByID(request.PullRequestID)
+	err = store.UpdatePRReviewers(request.PullRequestID, newReviewers)
+	if err != nil {
+		SendError(w, ErrorNotFound, "Failed to update PR reviewers", http.StatusInternalServerError)
+		return
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "pr":          updatedPR,
-        "replaced_by": newReviewer.UserID,
-    })
+	updatedPR, _ := store.GetPRByID(request.PullRequestID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pr":          updatedPR,
+		"replaced_by": newReviewer.UserID,
+	})
 }
 
 func GetPRHandler(w http.ResponseWriter, r *http.Request, store *storage.Storage) {
-    if r.Method != "GET" {
-        SendError(w, ErrorNotFound, "Method not allowed", http.StatusMethodNotAllowed)
-        return
-    }
+	if r.Method != "GET" {
+		SendError(w, ErrorNotFound, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-    prID := r.URL.Query().Get("pull_request_id")
-    if prID == "" {
-        SendError(w, ErrorNotFound, "pull_request_id is required", http.StatusBadRequest)
-        return
-    }
+	prID := r.URL.Query().Get("pull_request_id")
+	if prID == "" {
+		SendError(w, ErrorNotFound, "pull_request_id is required", http.StatusBadRequest)
+		return
+	}
 
-    pr, err := store.GetPRByID(prID)
-    if err != nil {
-        SendError(w, ErrorNotFound, "Failed to get PR", http.StatusInternalServerError)
-        return
-    }
-    if pr == nil {
-        SendError(w, ErrorNotFound, "PR not found", http.StatusNotFound)
-        return
-    }
+	pr, err := store.GetPRByID(prID)
+	if err != nil {
+		SendError(w, ErrorNotFound, "Failed to get PR", http.StatusInternalServerError)
+		return
+	}
+	if pr == nil {
+		SendError(w, ErrorNotFound, "PR not found", http.StatusNotFound)
+		return
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]interface{}{
-        "pr": pr,
-    })
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"pr": pr,
+	})
 }

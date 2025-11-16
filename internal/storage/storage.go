@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"pr-reviewer-service/internal/config"
 	"pr-reviewer-service/internal/models"
-    "pr-reviewer-service/internal/config" 
 
 	_ "github.com/lib/pq"
 )
@@ -15,10 +15,10 @@ type Storage struct {
 }
 
 func (s *Storage) Close() error {
-    if s.db != nil {
-        return s.db.Close()
-    }
-    return nil
+	if s.db != nil {
+		return s.db.Close()
+	}
+	return nil
 }
 
 func NewStorage(db *sql.DB) *Storage {
@@ -37,7 +37,7 @@ func (s *Storage) CreateTeam(team models.Team) error {
 			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (user_id) DO UPDATE SET 
 				username = $2, team_name = $3, is_active = $4
-		`, member.UserID, member.Username, team.TeamName, member.IsActive)  // ← Убедись что team.TeamName
+		`, member.UserID, member.Username, team.TeamName, member.IsActive) // ← Убедись что team.TeamName
 		if err != nil {
 			return err
 		}
@@ -52,14 +52,14 @@ func (s *Storage) GetUserByID(userID string) (*models.User, error) {
 		SELECT user_id, username, team_name, is_active 
 		FROM users WHERE user_id = $1
 	`, userID).Scan(&user.UserID, &user.Username, &user.TeamName, &user.IsActive)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &user, nil
 }
 
@@ -89,25 +89,25 @@ func (s *Storage) GetActiveTeamMembers(teamName, excludeUserID string) ([]models
 
 func (s *Storage) CreatePR(pr models.PullRequest) error {
 	reviewersJSON, _ := json.Marshal(pr.AssignedReviewers)
-	
+
 	_, err := s.db.Exec(`
 		INSERT INTO pull_requests 
 		(pull_request_id, pull_request_name, author_id, status, assigned_reviewers) 
 		VALUES ($1, $2, $3, $4, $5)
 	`, pr.PullRequestID, pr.PullRequestName, pr.AuthorID, pr.Status, reviewersJSON)
-	
+
 	return err
 }
 
 func (s *Storage) GetPRByID(prID string) (*models.PullRequest, error) {
 	var pr models.PullRequest
 	var reviewersJSON string
-	
+
 	err := s.db.QueryRow(`
 		SELECT pull_request_id, pull_request_name, author_id, status, assigned_reviewers, created_at, merged_at
 		FROM pull_requests WHERE pull_request_id = $1
 	`, prID).Scan(&pr.PullRequestID, &pr.PullRequestName, &pr.AuthorID, &pr.Status, &reviewersJSON, &pr.CreatedAt, &pr.MergedAt)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -116,7 +116,7 @@ func (s *Storage) GetPRByID(prID string) (*models.PullRequest, error) {
 	}
 
 	json.Unmarshal([]byte(reviewersJSON), &pr.AssignedReviewers)
-	
+
 	return &pr, nil
 }
 
@@ -130,17 +130,17 @@ func (s *Storage) UpdateUserActive(userID string, isActive bool) error {
 func InitDB() (*sql.DB, error) {
 	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		config.Host, config.Port, config.User, config.Password, config.DBName)
-	
+
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	err = db.Ping()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return db, nil
 }
 
@@ -180,78 +180,79 @@ func (s *Storage) GetTeam(teamName string) (*models.Team, error) {
 }
 
 func (s *Storage) UpdatePRStatus(prID string, status string) error {
-    if status == "MERGED" {
-        _, err := s.db.Exec(`
+	if status == "MERGED" {
+		_, err := s.db.Exec(`
             UPDATE pull_requests 
             SET status = $1, merged_at = CURRENT_TIMESTAMP 
             WHERE pull_request_id = $2 AND status != 'MERGED'
         `, status, prID)
-        return err
-    }
-    
-    _, err := s.db.Exec(`
+		return err
+	}
+
+	_, err := s.db.Exec(`
         UPDATE pull_requests SET status = $1 WHERE pull_request_id = $2
     `, status, prID)
-    return err
+	return err
 }
 
 func (s *Storage) GetPRsByReviewer(userID string) ([]models.PullRequest, error) {
-    rows, err := s.db.Query(`
+	rows, err := s.db.Query(`
         SELECT pull_request_id, pull_request_name, author_id, status, assigned_reviewers, created_at, merged_at
         FROM pull_requests 
         WHERE assigned_reviewers::jsonb ? $1
         ORDER BY created_at DESC
     `, userID)
-    
-    if err != nil {
-        fmt.Printf("SQL error in GetPRsByReviewer: %v\n", err)
-        return nil, err
-    }
-    defer rows.Close()
 
-    var prs []models.PullRequest
-    for rows.Next() {
-        var pr models.PullRequest
-        var reviewersJSON string
-        
-        err := rows.Scan(&pr.PullRequestID, &pr.PullRequestName, &pr.AuthorID, &pr.Status, &reviewersJSON, &pr.CreatedAt, &pr.MergedAt)
-        if err != nil {
-            fmt.Printf("Scan error in GetPRsByReviewer: %v\n", err)
-            return nil, err
-        }
-        if reviewersJSON != "" {
-            err = json.Unmarshal([]byte(reviewersJSON), &pr.AssignedReviewers)
-            if err != nil {
-                fmt.Printf("JSON unmarshal error in GetPRsByReviewer: %v\n", err)
-            }
-        }
-        
-        prs = append(prs, pr)
-    }
-    
-    return prs, nil
+	if err != nil {
+		fmt.Printf("SQL error in GetPRsByReviewer: %v\n", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var prs []models.PullRequest
+	for rows.Next() {
+		var pr models.PullRequest
+		var reviewersJSON string
+
+		err := rows.Scan(&pr.PullRequestID, &pr.PullRequestName, &pr.AuthorID, &pr.Status, &reviewersJSON, &pr.CreatedAt, &pr.MergedAt)
+		if err != nil {
+			fmt.Printf("Scan error in GetPRsByReviewer: %v\n", err)
+			return nil, err
+		}
+		if reviewersJSON != "" {
+			err = json.Unmarshal([]byte(reviewersJSON), &pr.AssignedReviewers)
+			if err != nil {
+				fmt.Printf("JSON unmarshal error in GetPRsByReviewer: %v\n", err)
+			}
+		}
+
+		prs = append(prs, pr)
+	}
+
+	return prs, nil
 }
 
 func (s *Storage) GetUserTeam(userID string) (string, error) {
-    var teamName string
-    err := s.db.QueryRow("SELECT team_name FROM users WHERE user_id = $1", userID).Scan(&teamName)
-    return teamName, err
+	var teamName string
+	err := s.db.QueryRow("SELECT team_name FROM users WHERE user_id = $1", userID).Scan(&teamName)
+	return teamName, err
 }
 
 func (s *Storage) UpdatePRReviewers(prID string, reviewers []string) error {
-    reviewersJSON, _ := json.Marshal(reviewers)
-    _, err := s.db.Exec(`
+	reviewersJSON, _ := json.Marshal(reviewers)
+	_, err := s.db.Exec(`
         UPDATE pull_requests SET assigned_reviewers = $1 WHERE pull_request_id = $2
     `, reviewersJSON, prID)
-    return err
+	return err
 }
 
 func (s *Storage) GetReviewStats() (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 	rows, err := s.db.Query(`
-		SELECT u.user_id, u.username, COUNT(pr.pull_request_id) as assignment_count
+		SELECT u.user_id, u.username, 
+			COUNT(CASE WHEN pr.assigned_reviewers IS NOT NULL AND pr.assigned_reviewers::jsonb ? u.user_id THEN 1 END) as assignment_count
 		FROM users u
-		LEFT JOIN pull_requests pr ON u.user_id = ANY(SELECT jsonb_array_elements_text(pr.assigned_reviewers))
+		LEFT JOIN pull_requests pr ON pr.assigned_reviewers IS NOT NULL AND pr.assigned_reviewers::jsonb ? u.user_id
 		GROUP BY u.user_id, u.username
 		ORDER BY assignment_count DESC
 	`)
@@ -265,7 +266,7 @@ func (s *Storage) GetReviewStats() (map[string]interface{}, error) {
 		Username string `json:"username"`
 		Count    int    `json:"assignment_count"`
 	}
-	
+
 	var userStats []UserStat
 	for rows.Next() {
 		var stat UserStat
@@ -314,7 +315,10 @@ func (s *Storage) BulkDeactivateTeamUsers(teamName string) (map[string]interface
 	rows, err := tx.Query(`
 		SELECT DISTINCT pr.pull_request_id 
 		FROM pull_requests pr
-		JOIN users u ON u.user_id = ANY(SELECT jsonb_array_elements_text(pr.assigned_reviewers))
+		JOIN users u ON u.user_id = ANY(
+		SELECT value->>0 
+		FROM jsonb_array_elements(pr.assigned_reviewers)
+		)
 		WHERE pr.status = 'OPEN' 
 		AND u.team_name = $1 
 		AND u.is_active = false
@@ -362,12 +366,12 @@ func min(a, b int) int {
 func (s *Storage) safeReassignPRReviewers(tx *sql.Tx, prID string, teamName string) (bool, error) {
 	var pr models.PullRequest
 	var reviewersJSON string
-	
+
 	err := tx.QueryRow(`
 		SELECT pull_request_id, author_id, assigned_reviewers, status
 		FROM pull_requests WHERE pull_request_id = $1
 	`, prID).Scan(&pr.PullRequestID, &pr.AuthorID, &reviewersJSON, &pr.Status)
-	
+
 	if err != nil {
 		return false, err
 	}
@@ -381,7 +385,7 @@ func (s *Storage) safeReassignPRReviewers(tx *sql.Tx, prID string, teamName stri
 		err := tx.QueryRow(`
 			SELECT is_active FROM users WHERE user_id = $1
 		`, reviewer).Scan(&isActive)
-		
+
 		if err == nil && isActive {
 			activeReviewers = append(activeReviewers, reviewer)
 		} else {
@@ -397,7 +401,7 @@ func (s *Storage) safeReassignPRReviewers(tx *sql.Tx, prID string, teamName stri
 			AND user_id != $2
 			AND user_id NOT IN (SELECT jsonb_array_elements_text($3::jsonb))
 		`, teamName, pr.AuthorID, reviewersJSON)
-		
+
 		if err != nil {
 			return false, err
 		}
@@ -418,13 +422,13 @@ func (s *Storage) safeReassignPRReviewers(tx *sql.Tx, prID string, teamName stri
 			count := min(needed, len(availableUsers))
 			newReviewers = append(newReviewers, availableUsers[:count]...)
 		}
-		
+
 		newReviewersJSON, _ := json.Marshal(newReviewers)
 		_, err = tx.Exec(`
 			UPDATE pull_requests SET assigned_reviewers = $1 
 			WHERE pull_request_id = $2
 		`, newReviewersJSON, prID)
-		
+
 		if err != nil {
 			return false, err
 		}

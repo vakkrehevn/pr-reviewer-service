@@ -1,3 +1,9 @@
-.vscode
+bin/
 *.exe
-*.ps1
+app-linux
+build.ps1
+run-lint.bat
+.env
+.DS_Store
+*.log
+test-app
