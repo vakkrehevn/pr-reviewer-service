@@ -6,7 +6,7 @@
 
 ### Запуск с Docker Compose
 ```bash
-docker-compose up --build
+docker-compose up 
 ```
 
 Сервис будет доступен по адресу: `http://localhost:8080`
